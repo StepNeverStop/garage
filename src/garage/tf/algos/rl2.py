@@ -58,14 +58,11 @@ class RL2Env(Environment):
         """list: A list of string representing the supported render modes."""
         return self.env.render_modes
 
-    def reset(self, **kwargs):
+    def reset(self):
         """Call reset on wrapped env.
 
-        Args:
-            kwargs: Keyword args
-
         Returns:
-            numpy.ndarray: The first observation. It must conforms to
+            numpy.ndarray: The first observation. It must conform to
             `observation_space`.
             dict: The episode-level information. Note that this is not part
             of `env_info` provided in `step()`. It contains information of
@@ -73,7 +70,6 @@ class RL2Env(Environment):
             action (e.g. in the case of goal-conditioned or MTRL.)
 
         """
-        del kwargs
         first_obs, episode_info = self.env.reset()
         first_obs = np.concatenate(
             [first_obs,

@@ -5,7 +5,7 @@ This example requires that garage[dm_control] be installed.
 """
 import argparse
 
-from garage.envs.dm_control import DmControlEnv
+from garage.envs.dm_control import DMControlEnv
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--n_steps',
@@ -15,7 +15,7 @@ parser.add_argument('--n_steps',
 args = parser.parse_args()
 
 # Construct the environment
-env = DmControlEnv.from_suite('walker', 'run', args.n_steps)
+env = DMControlEnv.from_suite('walker', 'run', args.n_steps)
 
 # Reset the environment and launch the viewer
 env.reset()
@@ -26,3 +26,4 @@ while True:
     ts = env.step(env.action_space.sample())
     if ts.last:
         break
+env.close()

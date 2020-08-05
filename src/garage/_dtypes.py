@@ -474,6 +474,146 @@ class StepType(enum.IntEnum):
     TIMEOUT = 3
 
 
+class EnvStep(
+        collections.namedtuple('EnvStep', [
+            'env_spec', 'observation', 'action', 'reward', 'next_observation',
+            'env_info', 'step_type'
+        ])):
+    # pylint: disable=missing-return-doc, missing-return-type-doc, missing-param-doc, missing-type-doc  # noqa: E501
+    r"""A tuple representing a single step returned by the environment.
+
+    Attributes:
+        env_spec (garage.envs.EnvSpec): Specification for the environment from
+            which this data was sampled.
+        observation (numpy.ndarray): A numpy array of shape :math:`(O^*)`
+            containing the observation for the this time step in the
+            environment. These must conform to
+            :obj:`env_spec.observation_space`.
+            The observation before applying the action.
+            `None` if `step_type` is `StepType.FIRST`, i.e. at the start of a
+            sequence.
+        action (numpy.ndarray): A numpy array of shape :math:`(A^*)`
+            containing the action for the this time step. These must conform
+            to :obj:`env_spec.action_space`.
+            `None` if `step_type` is `StepType.FIRST`, i.e. at the start of a
+            sequence.
+        reward (float): A float representing the reward for taking the action
+            given the observation, at the this time step.
+            `None` if `step_type` is `StepType.FIRST`, i.e. at the start of a
+            sequence.
+        next_observation (numpy.ndarray): A numpy array of shape :math:`(O^*)`
+            containing the observation for the this time step in the
+            environment. These must conform to
+            :obj:`env_spec.observation_space`.
+            The observation after applying the action.
+        env_info (dict): A dict arbitrary environment state information.
+        step_type (StepType): a `StepType` enum value. Can either be
+            StepType.FIRST, StepType.MID, StepType.TERMINAL, StepType.TIMEOUT.
+
+
+    Raises:
+        ValueError: If any of the above attributes do not conform to their
+            prescribed types and shapes.
+
+    """
+
+    def __new__(cls, env_spec, observation, action, reward, next_observation,
+                env_info, step_type):  # noqa: D102
+        # pylint: disable=too-many-branches
+        # observation
+        if not env_spec.observation_space.contains(observation):
+            if isinstance(env_spec.observation_space,
+                          (akro.Box, akro.Discrete, akro.Dict)):
+                if env_spec.observation_space.flat_dim != np.prod(
+                        observation.shape):
+                    raise ValueError('observation should have the same '
+                                     'dimensionality as the observation_space '
+                                     '({}), but got data with shape {} '
+                                     'instead'.format(
+                                         env_spec.observation_space.flat_dim,
+                                         observation.shape))
+            else:
+                raise ValueError(
+                    'observation must conform to observation_space {}, '
+                    'but got data with shape {} instead.'.format(
+                        env_spec.observation_space, observation))
+
+        if not env_spec.observation_space.contains(next_observation):
+            if isinstance(env_spec.observation_space,
+                          (akro.Box, akro.Discrete, akro.Dict)):
+                if env_spec.observation_space.flat_dim != np.prod(
+                        next_observation.shape):
+                    raise ValueError('next_observation should have the same '
+                                     'dimensionality as the observation_space '
+                                     '({}), but got data with shape {} '
+                                     'instead'.format(
+                                         env_spec.observation_space.flat_dim,
+                                         next_observation.shape))
+            else:
+                raise ValueError(
+                    'next_observation must conform to observation_space {}, '
+                    'but got data with shape {} instead.'.format(
+                        env_spec.observation_space, next_observation))
+
+        # action
+        if not env_spec.action_space.contains(action):
+            if isinstance(env_spec.action_space,
+                          (akro.Box, akro.Discrete, akro.Dict)):
+                if env_spec.action_space.flat_dim != np.prod(action.shape):
+                    raise ValueError('action should have the same '
+                                     'dimensionality as the action_space '
+                                     '({}), but got data with shape {} '
+                                     'instead'.format(
+                                         env_spec.action_space.flat_dim,
+                                         action.shape))
+            else:
+                raise ValueError('action must conform to action_space {}, '
+                                 'but got data with shape {} instead.'.format(
+                                     env_spec.action_space, action))
+
+        if not isinstance(env_info, dict):
+            raise ValueError('env_info must be type {}, but got type {} '
+                             'instead.'.format(dict, type(env_info)))
+
+        if not isinstance(reward, float):
+            raise ValueError('reward must be type {}, but got type {} '
+                             'instead.'.format(float, type(reward)))
+
+        if not isinstance(step_type, StepType):
+            raise ValueError(
+                'step_type must be dtype garage.StepType, but got dtype {} '
+                'instead.'.format(type(step_type)))
+
+        return super().__new__(EnvStep, env_spec, observation, action, reward,
+                               next_observation, env_info, step_type)
+
+    @property
+    def first(self):
+        """bool: Whether this `TimeStep` is the first of a sequence."""
+        return self.step_type is StepType.FIRST
+
+    @property
+    def mid(self):
+        """bool: Whether this `TimeStep` is in the mid of a sequence."""
+        return self.step_type is StepType.MID
+
+    @property
+    def terminal(self):
+        """bool: Whether this `TimeStep` records a termination condition."""
+        return self.step_type is StepType.TERMINAL
+
+    @property
+    def timeout(self):
+        """bool: Whether this `TimeStep` records a time out condition."""
+        return self.step_type is StepType.TIMEOUT
+
+    @property
+    def last(self):
+        """bool: Whether this `TimeStep` is the last of a sequence."""
+        return self.step_type is StepType.TERMINAL or self.step_type \
+            is StepType.TIMEOUT
+
+
 class TimeStep(
         collections.namedtuple('TimeStep', [
             'env_spec', 'observation', 'action', 'reward', 'next_observation',
@@ -514,7 +654,7 @@ class TimeStep(
         agent_info (dict): A dict of arbitrary agent
             state information. For example, this may contain the hidden states
             from an RNN policy.
-        step_type (garage.StepType): a `StepType` enum value. Can either be
+        step_type (StepType): a `StepType` enum value. Can either be
             StepType.FIRST, StepType.MID, StepType.TERMINAL, StepType.TIMEOUT.
 
 
@@ -624,6 +764,27 @@ class TimeStep(
         """bool: Whether this `TimeStep` is the last of a sequence."""
         return self.step_type is StepType.TERMINAL or self.step_type \
             is StepType.TIMEOUT
+
+    @classmethod
+    def from_env_step(cls, env_step, agent_info):
+        """Create a TimeStep from a EnvStep.
+
+        Args:
+            env_step (EnvStep): the env step returned by the environment.
+            agent_info (dict):  A dict of arbitrary agent state information.
+
+        Returns:
+            TimeStep: The TimeStep with all information of EnvStep plus the
+            agent info.
+        """
+        return cls(env_spec=env_step.env_spec,
+                   observation=env_step.observation,
+                   action=env_step.action,
+                   reward=env_step.reward,
+                   next_observation=env_step.next_observation,
+                   env_info=env_step.env_info,
+                   agent_info=agent_info,
+                   step_type=env_step.step_type)
 
 
 class InOutSpec:

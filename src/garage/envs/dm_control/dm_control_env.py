@@ -7,7 +7,7 @@ from dm_control.rl.control import flatten_observation
 from dm_env import StepType as dm_StepType
 import numpy as np
 
-from garage import Environment, StepType, TimeStep
+from garage import Environment, StepType, EnvStep
 from garage.envs import EnvSpec
 from garage.envs.dm_control.dm_control_viewer import DmControlViewer
 
@@ -24,11 +24,11 @@ def _flat_shape(observation):
     return np.sum(int(np.prod(v.shape)) for k, v in observation.items())
 
 
-class DmControlEnv(Environment):
+class DMControlEnv(Environment):
     """Binding for `dm_control <https://arxiv.org/pdf/1801.00690.pdf>`."""
 
     def __init__(self, env, name=None, max_episode_length=math.inf):
-        """Create a DmControlEnv.
+        """Create a DMControlEnv.
 
         Args:
             env (dm_control.suite.Task): The wrapped dm_control environment.
@@ -103,7 +103,7 @@ class DmControlEnv(Environment):
         """Resets the environment.
 
         Returns:
-            numpy.ndarray: The first observation. It must conforms to
+            numpy.ndarray: The first observation. It must conform to
             `observation_space`.
             dict: The episode-level information. Note that this is not part
             of `env_info` provided in `step()`. It contains information of
@@ -121,13 +121,13 @@ class DmControlEnv(Environment):
         return first_obs, episode_info
 
     def step(self, action):
-        """Steps the environment with the action and returns a `TimeStep`.
+        """Steps the environment with the action and returns a `EnvStep`.
 
         Args:
             action (object): input action
 
         Returns:
-            TimeStep: The time step resulting from the action.
+            EnvStep: The time step resulting from the action.
 
         Raises:
             RuntimeError: if `step()` is called after the environment has been
@@ -155,14 +155,13 @@ class DmControlEnv(Environment):
         elif dm_time_step.step_type == dm_StepType.LAST:
             step_type = StepType.TERMINAL
 
-        return TimeStep(
+        return EnvStep(
             env_spec=self.spec,
             observation=last_obs,
             action=action,
             reward=dm_time_step.reward,
             next_observation=observation,
             env_info=dm_time_step.observation,  # TODO: what to put in env_info
-            agent_info={},  # TODO: can't be populated by env
             step_type=step_type)
 
     def render(self, mode):
@@ -177,13 +176,9 @@ class DmControlEnv(Environment):
         Raises:
             ValueError: if mode is not supported.
         """
-        # pylint: disable=inconsistent-return-statements
+        self._validate_render_mode(mode)
         if mode == 'rgb_array':
             return self._env.physics.render()
-        else:
-            raise ValueError('Supported render modes are {}, but '
-                             'got render mode {} instead.'.format(
-                                 self.render_modes, mode))
 
     def visualize(self):
         """Creates a visualization of the environment."""

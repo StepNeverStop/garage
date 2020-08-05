@@ -67,14 +67,11 @@ class TaskOnehotWrapper(Environment):
         """list: A list of string representing the supported render modes."""
         return self.env.render_modes
 
-    def reset(self, **kwargs):
+    def reset(self):
         """Sample new task and call reset on new task env.
 
-        Args:
-            kwargs (dict): Keyword arguments to be passed to env.reset
-
         Returns:
-            numpy.ndarray: The first observation. It must conforms to
+            numpy.ndarray: The first observation. It must conform to
             `observation_space`.
             dict: The episode-level information. Note that this is not part
             of `env_info` provided in `step()`. It contains information of
@@ -82,7 +79,7 @@ class TaskOnehotWrapper(Environment):
             action (e.g. in the case of goal-conditioned or MTRL.)
 
         """
-        first_obs, episode_info = self.env.reset(**kwargs)
+        first_obs, episode_info = self.env.reset()
         first_obs = self._obs_with_one_hot(first_obs)
         self._last_observation = first_obs
         return first_obs, episode_info

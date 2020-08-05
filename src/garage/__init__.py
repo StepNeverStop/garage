@@ -1,6 +1,7 @@
 """Garage Base."""
 # yapf: disable
-from garage._dtypes import (InOutSpec,
+from garage._dtypes import (EnvStep,
+                            InOutSpec,
                             StepType,
                             TimeStep,
                             TimeStepBatch,
@@ -17,5 +18,5 @@ from garage.experiment.experiment import wrap_experiment
 __all__ = [
     '_Default', 'make_optimizer', 'wrap_experiment', 'TimeStep',
     'TrajectoryBatch', 'log_multitask_performance', 'log_performance',
-    'InOutSpec', 'TimeStepBatch', 'Environment', 'StepType'
+    'InOutSpec', 'TimeStepBatch', 'Environment', 'StepType', 'EnvStep'
 ]

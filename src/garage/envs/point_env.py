@@ -79,7 +79,7 @@ class PointEnv(Environment):
         """Call reset on wrapped env.
 
         Returns:
-            numpy.ndarray: The first observation. It must conforms to
+            numpy.ndarray: The first observation. It must conform to
             `observation_space`.
             dict: The episode-level information. Note that this is not part
             of `env_info` provided in `step()`. It contains information of

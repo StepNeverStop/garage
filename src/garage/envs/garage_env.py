@@ -8,7 +8,7 @@ import gym
 from gym.wrappers.time_limit import TimeLimit
 import numpy as np
 
-from garage import Environment, StepType, TimeStep
+from garage import Environment, StepType, EnvStep
 from garage.envs.env_spec import EnvSpec
 
 # The gym environments using one of the packages in the following lists as
@@ -108,14 +108,16 @@ class GarageEnv(Environment):
                 obs space to an akro.Image and normalizes pixel values.
             max_episode_length (int): The maximum steps allowed for an episode.
         """
-        self.env = env if env else gym.make(env_name)
+        self._env = env if env else gym.make(env_name)
 
-        env = self.env
-        if isinstance(self.env, TimeLimit):  # env is wrapped by TimeLimit
-            self.env._max_episode_steps = max_episode_length
-            self._render_modes = self.env.unwrapped.metadata['render.modes']
-        elif 'metadata' in env.__dict__:
-            self._render_modes = env.metadata['render.modes']
+        if isinstance(self._env, TimeLimit):  # env is wrapped by TimeLimit
+            if math.isinf(max_episode_length):  # use default value
+                max_episode_length = self._env._max_episode_steps
+            else:  # overwrite gym TimeLimit's max episode steps
+                self._env._max_episode_steps = max_episode_length
+            self._render_modes = self._env.unwrapped.metadata['render.modes']
+        elif 'metadata' in self._env.__dict__:
+            self._render_modes = self._env.metadata['render.modes']
         else:
             self._render_modes = []
 
@@ -123,8 +125,8 @@ class GarageEnv(Environment):
         self._step_cnt = 0
         self._visualize = False
 
-        self._action_space = akro.from_gym(self.env.action_space)
-        self._observation_space = akro.from_gym(self.env.observation_space,
+        self._action_space = akro.from_gym(self._env.action_space)
+        self._observation_space = akro.from_gym(self._env.observation_space,
                                                 is_image=is_image)
         self._spec = EnvSpec(action_space=self.action_space,
                              observation_space=self.observation_space,
@@ -150,14 +152,11 @@ class GarageEnv(Environment):
         """list: A list of string representing the supported render modes."""
         return self._render_modes
 
-    def reset(self, **kwargs):
+    def reset(self):
         """Call reset on wrapped env.
 
-        Args:
-            kwargs: Keyword args
-
         Returns:
-            numpy.ndarray: The first observation. It must conforms to
+            numpy.ndarray: The first observation. It must conform to
             `observation_space`.
             dict: The episode-level information. Note that this is not part
             of `env_info` provided in `step()`. It contains information of
@@ -165,13 +164,12 @@ class GarageEnv(Environment):
             action (e.g. in the case of goal-conditioned or MTRL.)
 
         """
-        first_obs = self.env.reset(**kwargs)
+        first_obs = self._env.reset()
 
         self._step_cnt = 0
         self._last_observation = first_obs
-        # Populate episode_info if needed.
-        episode_info = {}
-        return first_obs, episode_info
+
+        return first_obs, dict()
 
     def step(self, action):
         """Call step on wrapped env.
@@ -180,7 +178,7 @@ class GarageEnv(Environment):
             action (np.ndarray): An action provided by the agent.
 
         Returns:
-            TimeStep: The time step resulting from the action.
+            EnvStep: The time step resulting from the action.
 
         Raises:
             RuntimeError: if `step()` is called after the environment has been
@@ -190,10 +188,10 @@ class GarageEnv(Environment):
         if self._last_observation is None:
             raise RuntimeError('reset() must be called before step()!')
 
-        observation, reward, done, info = self.env.step(action)
+        observation, reward, done, info = self._env.step(action)
 
         if self._visualize:
-            self.env.render(mode='human')
+            self._env.render(mode='human')
 
         last_obs = self._last_observation
         # Type conversion
@@ -227,14 +225,13 @@ class GarageEnv(Environment):
             info['TimeLimit.truncated'] = False
             info['GarageEnv.TimeLimitTerminated'] = False
 
-        return TimeStep(
+        return EnvStep(
             env_spec=self.spec,
             observation=last_obs,
             action=action,
             reward=reward,
             next_observation=observation,
             env_info=info,
-            agent_info={},  # TODO: can't be populated by env
             step_type=step_type)
 
     def render(self, mode):
@@ -244,21 +241,18 @@ class GarageEnv(Environment):
             mode (str): the mode to render with. The string must be present in
                 `self.render_modes`.
         """
-        if mode not in self.render_modes:
-            raise ValueError('Supported render modes are {}, but '
-                             'got render mode {} instead.'.format(
-                                 self.render_modes, mode))
-        return self.env.render(mode)
+        self._validate_render_mode(mode)
+        return self._env.render(mode)
 
     def visualize(self):
         """Creates a visualization of the environment."""
-        self.env.render(mode='human')
+        self._env.render(mode='human')
         self._visualize = True
 
     def close(self):
         """Close the wrapped env."""
         self._close_viewer_window()
-        self.env.close()
+        self._env.close()
 
     def _close_viewer_window(self):
         """Close viewer window.
@@ -274,8 +268,8 @@ class GarageEnv(Environment):
         """
         # We need to do some strange things here to fix-up flaws in gym
         # pylint: disable=import-outside-toplevel
-        if self.env.spec:
-            if any(package in getattr(self.env.spec, 'entry_point', '')
+        if self._env.spec:
+            if any(package in getattr(self._env.spec, 'entry_point', '')
                    for package in KNOWN_GYM_NOT_CLOSE_MJ_VIEWER):
                 # This import is not in the header to avoid a MuJoCo dependency
                 # with non-MuJoCo environments that use this base class.
@@ -286,17 +280,17 @@ class GarageEnv(Environment):
                     # If we can't import mujoco_py, we must not have an
                     # instance of a class that we know how to close here.
                     return
-                if (hasattr(self.env, 'viewer')
-                        and isinstance(self.env.viewer, MjViewer)):
-                    glfw.destroy_window(self.env.viewer.window)
-            elif any(package in getattr(self.env.spec, 'entry_point', '')
+                if (hasattr(self._env, 'viewer')
+                        and isinstance(self._env.viewer, MjViewer)):
+                    glfw.destroy_window(self._env.viewer.window)
+            elif any(package in getattr(self._env.spec, 'entry_point', '')
                      for package in KNOWN_GYM_NOT_CLOSE_VIEWER):
-                if hasattr(self.env, 'viewer'):
+                if hasattr(self._env, 'viewer'):
                     from gym.envs.classic_control.rendering import (
                         Viewer, SimpleImageViewer)
-                    if (isinstance(self.env.viewer,
+                    if (isinstance(self._env.viewer,
                                    (SimpleImageViewer, Viewer))):
-                        self.env.viewer.close()
+                        self._env.viewer.close()
 
     def __getstate__(self):
         """See `Object.__getstate__.
@@ -307,7 +301,7 @@ class GarageEnv(Environment):
         """
         # the viewer object is not pickleable
         # we first make a copy of the viewer
-        env = self.env
+        env = self._env
 
         # get the inner env if it is a gym.Wrapper
         if issubclass(env.__class__, gym.Wrapper):

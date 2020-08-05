@@ -98,7 +98,7 @@ class Environment(abc.ABC):
         """Resets the environment.
 
         Returns:
-            numpy.ndarray: The first observation. It must conforms to
+            numpy.ndarray: The first observation. It must conform to
             `observation_space`.
             dict: The episode-level information. Note that this is not part
             of `env_info` provided in `step()`. It contains information of
@@ -109,15 +109,15 @@ class Environment(abc.ABC):
 
     @abc.abstractmethod
     def step(self, action):
-        """Steps the environment with the action and returns a `TimeStep`.
+        """Steps the environment with the action and returns a `EnvStep`.
 
-        If the environment returned the last `TimeStep` of a sequence (either
+        If the environment returned the last `EnvStep` of a sequence (either
         of type TERMINAL or TIMEOUT) at the previous step, this call to
         `step()` will start a new sequence and `action` will be ignored.
 
         If `spec.max_episode_length` is reached after applying the action
         and the environment has not terminated the episode, `step()` should
-        return a `TimeStep` with `step_type==StepType.TIMEOUT`.
+        return a `EnvStep` with `step_type==StepType.TIMEOUT`.
 
         If possible, update the visualization display as well.
 
@@ -126,7 +126,7 @@ class Environment(abc.ABC):
                 of arrays conforming to `action_space`.
 
         Returns:
-            TimeStep: The time step resulting from the action.
+            EnvStep: The time step resulting from the action.
 
         Raises:
             RuntimeError: if `step()` is called after the environment has been
@@ -202,6 +202,12 @@ class Environment(abc.ABC):
         Environments will automatically `close()` themselves when they are
         garbage collected or when the program exits.
         """
+
+    def _validate_render_mode(self, mode):
+        if mode not in self.render_modes:
+            raise ValueError('Supported render modes are {}, but '
+                             'got render mode {} instead.'.format(
+                                 self.render_modes, mode))
 
     def __del__(self):
         """Environment destructor."""

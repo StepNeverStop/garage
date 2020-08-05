@@ -77,14 +77,11 @@ class NormalizedEnv(Environment):
         """list: A list of string representing the supported render modes."""
         return self.env.render_modes
 
-    def reset(self, **kwargs):
+    def reset(self):
         """Call reset on wrapped env.
 
-        Args:
-            kwargs: Keyword args
-
         Returns:
-            numpy.ndarray: The first observation. It must conforms to
+            numpy.ndarray: The first observation. It must conform to
             `observation_space`.
             dict: The episode-level information. Note that this is not part
             of `env_info` provided in `step()`. It contains information of
@@ -92,7 +89,7 @@ class NormalizedEnv(Environment):
             action (e.g. in the case of goal-conditioned or MTRL.)
 
         """
-        first_obs, episode_info = self.env.reset(**kwargs)
+        first_obs, episode_info = self.env.reset()
         if self._normalize_obs:
             return self._apply_normalize_obs(first_obs), episode_info
         else:

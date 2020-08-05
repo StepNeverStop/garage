@@ -6,14 +6,14 @@ import akro
 import gym
 from gym.wrappers.time_limit import TimeLimit
 
-from garage import Environment, StepType, TimeStep
+from garage import Environment, EnvStep, StepType
 from garage.envs.env_spec import EnvSpec
 
 # The bullet gym environments in this list inherit from the
 # MJCFBasedBulletEnv class, which doesn't follow a consistent class variable
 # naming practice -> constructor param `render` is stored as `isRender`. Thus
 # they require additional pickling logic.
-MJCFBASED_BULLET_ENV = [
+_MJCF_BASED_BULLET_ENVS = [
     'ReacherBulletEnv', 'PusherBulletEnv', 'StrikerBulletEnv',
     'ThrowerBulletEnv', 'Walker2DBulletEnv', 'InvertedPendulumBulletEnv',
     'InvertedDoublePendulumBulletEnv', 'InvertedPendulumSwingupBulletEnv',
@@ -55,11 +55,11 @@ class BulletEnv(Environment):
             else:
                 env = gym.make(env_name)
 
-        self.env = env
+        self._env = env
 
-        if isinstance(self.env, TimeLimit):  # env is wrapped by TimeLimit
-            self.env._max_episode_steps = max_episode_length
-            self._render_modes = self.env.unwrapped.metadata['render.modes']
+        if isinstance(self._env, TimeLimit):  # env is wrapped by TimeLimit
+            self._env._max_episode_steps = max_episode_length
+            self._render_modes = self._env.unwrapped.metadata['render.modes']
         elif 'metadata' in env.__dict__:
             self._render_modes = env.metadata['render.modes']
         else:
@@ -70,8 +70,8 @@ class BulletEnv(Environment):
         self._max_episode_length = max_episode_length
         self._visualize = False
 
-        self._action_space = akro.from_gym(self.env.action_space)
-        self._observation_space = akro.from_gym(self.env.observation_space,
+        self._action_space = akro.from_gym(self._env.action_space)
+        self._observation_space = akro.from_gym(self._env.observation_space,
                                                 is_image=is_image)
         self._spec = EnvSpec(action_space=self.action_space,
                              observation_space=self.observation_space,
@@ -97,14 +97,11 @@ class BulletEnv(Environment):
         """list: A list of string representing the supported render modes."""
         return self._render_modes
 
-    def reset(self, **kwargs):
+    def reset(self):
         """Call reset on wrapped env.
 
-        Args:
-            kwargs: Keyword args
-
         Returns:
-            numpy.ndarray: The first observation. It must conforms to
+            numpy.ndarray: The first observation. It must conform to
             `observation_space`.
             dict: The episode-level information. Note that this is not part
             of `env_info` provided in `step()`. It contains information of
@@ -112,13 +109,12 @@ class BulletEnv(Environment):
             action (e.g. in the case of goal-conditioned or MTRL.)
 
         """
-        first_obs = self.env.reset(**kwargs)
+        first_obs = self._env.reset()
 
         self._step_cnt = 0
         self._last_observation = first_obs
-        # Populate episode_info if needed.
-        episode_info = {}
-        return first_obs, episode_info
+
+        return first_obs, dict()
 
     def step(self, action):
         """Call step on wrapped env.
@@ -127,7 +123,7 @@ class BulletEnv(Environment):
             action (np.ndarray): An action provided by the agent.
 
         Returns:
-            TimeStep: The time step resulting from the action.
+            EnvStep: The time step resulting from the action.
 
         Raises:
             RuntimeError: if `step()` is called after the environment has been
@@ -137,10 +133,10 @@ class BulletEnv(Environment):
         if self._last_observation is None:
             raise RuntimeError('reset() must be called before step()!')
 
-        observation, reward, done, info = self.env.step(action)
+        observation, reward, done, info = self._env.step(action)
 
         if self._visualize:
-            self.env.render(mode='human')
+            self._env.render(mode='human')
 
         last_obs = self._last_observation
         # Type conversion
@@ -166,23 +162,21 @@ class BulletEnv(Environment):
         # termination. The time limit termination signal
         # will be saved inside env_infos as
         # 'BulletEnv.TimeLimitTerminated'
-        if 'TimeLimit.truncated' in info or \
-            self._step_cnt >= self._spec.max_episode_length:
+        if ('TimeLimit.truncated' in info or
+            self._step_cnt >= self._spec.max_episode_length):
             info['BulletEnv.TimeLimitTerminated'] = True
             step_type = StepType.TIMEOUT
         else:
             info['TimeLimit.truncated'] = False
             info['BulletEnv.TimeLimitTerminated'] = False
 
-        return TimeStep(
-            env_spec=self.spec,
-            observation=last_obs,
-            action=action,
-            reward=reward,
-            next_observation=observation,
-            env_info=info,
-            agent_info={},  # TODO: can't be populated by env
-            step_type=step_type)
+        return EnvStep(env_spec=self.spec,
+                       observation=last_obs,
+                       action=action,
+                       reward=reward,
+                       next_observation=observation,
+                       env_info=info,
+                       step_type=step_type)
 
     def render(self, mode):
         """Renders the environment.
@@ -191,15 +185,12 @@ class BulletEnv(Environment):
             mode (str): the mode to render with. The string must be present in
                 `self.render_modes`.
         """
-        if mode not in self.render_modes:
-            raise ValueError('Supported render modes are {}, but '
-                             'got render mode {} instead.'.format(
-                                 self.render_modes, mode))
-        return self.env.render(mode)
+        self._validate_render_mode(mode)
+        return self._env.render(mode)
 
     def visualize(self):
         """Creates a visualization of the environment."""
-        self.env.render(mode='human')
+        self._env.render(mode='human')
         self._visualize = True
 
     def close(self):
@@ -209,11 +200,11 @@ class BulletEnv(Environment):
         #  Note that disconnect() disconnects the environment from the physics
         #  server, whereas the GUI window will not be destroyed.
         #  The expected behavior
-        if self.env.env.spec.id == 'RacecarZedBulletEnv-v0':
+        if self._env.env.spec.id == 'RacecarZedBulletEnv-v0':
             # pylint: disable=protected-access
-            if self.env.env._p.isConnected():
-                self.env.env._p.disconnect()
-        self.env.close()
+            if self._env.env._p.isConnected():
+                self._env.env._p.disconnect()
+        self._env.close()
 
     def __getstate__(self):
         """See `Object.__getstate__.
@@ -222,7 +213,7 @@ class BulletEnv(Environment):
             dict: The instance’s __init__() arguments
 
         """
-        env = self.env.env
+        env = self._env.env
 
         # Extract constructor signature
         sig = inspect.signature(env.__init__)
@@ -234,7 +225,7 @@ class BulletEnv(Environment):
                 'MinitaurBulletDuckEnv') >= 0:
             args['render'] = env._is_render
             param_names.remove('render')
-        elif any(env.spec.id.find(id) >= 0 for id in MJCFBASED_BULLET_ENV):
+        elif any(env.spec.id.find(id) >= 0 for id in _MJCF_BASED_BULLET_ENVS):
             args['render'] = env.isRender
             if 'render' in param_names:
                 param_names.remove('render')

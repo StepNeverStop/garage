@@ -13,16 +13,14 @@ parser.add_argument('--n_steps',
 args = parser.parse_args()
 
 # Construct the environment
-env = GarageEnv(gym.make('MountainCar-v0'))
+env = GarageEnv(gym.make('MountainCar-v0'), max_episode_length=args.n_steps)
 
 # Reset the environment and launch the viewer
 env.reset()
 env.visualize()
 
-steps = 0
 while True:
-    if steps == args.n_steps:
-        env.close()
+    ts = env.step(env.action_space.sample())
+    if ts.last:
         break
-    env.step(env.action_space.sample())
-    steps += 1
+env.close()
